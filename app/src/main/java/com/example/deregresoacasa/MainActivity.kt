@@ -3,6 +3,7 @@ package com.example.deregresoacasa
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.location.Location
@@ -30,9 +31,24 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 
 class MainActivity : ComponentActivity() {
+
+    private val LOCATION_PERMISSION_CODE = 1001
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Configuration.getInstance().userAgentValue = packageName
+
+        // Solicitar permisos directamente al iniciar
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+                LOCATION_PERMISSION_CODE
+            )
+        }
+
         setContent {
             RouteMapScreen()
         }
@@ -46,6 +62,24 @@ fun RouteMapScreen() {
     val context = LocalContext.current
     val mapView = remember { MapView(context) }
     var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
+    var homeLocation by remember { mutableStateOf<GeoPoint?>(null) }
+
+    // Función para cargar ubicación guardada
+    fun getSavedHomeLocation(context: Context): GeoPoint? {
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val lat = prefs.getFloat("home_lat", 0f)
+        val lon = prefs.getFloat("home_lon", 0f)
+        return if (lat != 0f && lon != 0f) GeoPoint(lat.toDouble(), lon.toDouble()) else null
+    }
+
+    // Función para guardar ubicación
+    fun saveHomeLocation(context: Context, location: GeoPoint) {
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putFloat("home_lat", location.latitude.toFloat())
+            .putFloat("home_lon", location.longitude.toFloat())
+            .apply()
+    }
 
     LaunchedEffect(locationPermission.status) {
         if (locationPermission.status.isGranted) {
@@ -58,10 +92,17 @@ fun RouteMapScreen() {
                 mapController.setZoom(15.0)
                 mapController.setCenter(userLocation)
 
-                val drawable = ContextCompat.getDrawable(context, R.drawable.casa)
+                // Agrega marcador de ubicación actual
+                val drawable = ContextCompat.getDrawable(context, R.drawable.alfiler)
                 val bitmap = (drawable as BitmapDrawable).bitmap
-                val scaledBitmap = Bitmap.createScaledBitmap(bitmap, 30, 30, false)
+                val scaledBitmap = Bitmap.createScaledBitmap(bitmap, 20, 20, false)
                 val scaledDrawable = BitmapDrawable(context.resources, scaledBitmap)
+
+                // Agregar marcador pa la casa
+                val drawableCasa = ContextCompat.getDrawable(context, R.drawable.casa)
+                val bitmapCasa = (drawableCasa as BitmapDrawable).bitmap
+                val scaledBitmapCasa = Bitmap.createScaledBitmap(bitmapCasa, 20, 20, false)
+                val scaledDrawableCasa = BitmapDrawable(context.resources, scaledBitmapCasa)
 
                 val startMarker = Marker(mapView).apply {
                     position = userLocation
@@ -70,50 +111,82 @@ fun RouteMapScreen() {
                     title = "Ubicación actual"
                 }
                 mapView.overlays.add(startMarker)
+
+                // Cargar ubicación de casa si existe
+                homeLocation = getSavedHomeLocation(context)
+                homeLocation?.let {
+                    val homeMarker = Marker(mapView).apply {
+                        position = it
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        icon = scaledDrawableCasa
+                        title = "Mi casa"
+                    }
+                    mapView.overlays.add(homeMarker)
+                }
+
                 mapView.invalidate()
             }
         }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        if (!locationPermission.status.isGranted) {
-            Button(onClick = { locationPermission.launchPermissionRequest() }) {
-                Text("Permitir ubicación")
-            }
-        } else {
-            Box(modifier = Modifier.fillMaxSize()) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { mapView }
-                )
+        Box(modifier = Modifier.fillMaxSize()) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { mapView }
+            )
 
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Button(onClick = { mapView.controller.zoomIn() }) {
-                        Text("+")
-                    }
-
-                    Button(onClick = { mapView.controller.zoomOut() }) {
-                        Text("-")
-                    }
+            // Botón para acercar y alejar
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 80.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Button(onClick = { mapView.controller.zoomIn() }) {
+                    Text("+")
                 }
 
-                /*Button(
-                    onClick = {
-                        userLocation?.let {
-                            mapView.controller.setCenter(it)
+                Button(onClick = { mapView.controller.zoomOut() }) {
+                    Text("-")
+                }
+            }
+
+            // Botón centrar
+            Button(
+                onClick = {
+                    userLocation?.let {
+                        mapView.controller.setCenter(it)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+            ) {
+                Text("Centrar en mi ubicación")
+            }
+
+            // Botón para establecer ubicación de casa
+            Button(
+                onClick = {
+                    userLocation?.let {
+                        saveHomeLocation(context, it)
+                        homeLocation = it
+                        val homeMarker = Marker(mapView).apply {
+                            position = it
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            icon = ContextCompat.getDrawable(context, R.drawable.casa)
+                            title = "Mi casa"
                         }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp)
-                ) {
-                    Text("Centrar en mi ubicación")
-                }*/
+                        mapView.overlays.add(homeMarker)
+                        mapView.invalidate()
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+            ) {
+                Text("Establecer casa")
             }
         }
     }
