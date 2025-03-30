@@ -63,6 +63,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.constraintlayout)
+    implementation(libs.play.services.location)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -71,9 +72,8 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    implementation("com.google.maps.android:maps-compose:2.11.4")
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
-    implementation("com.google.android.gms:play-services-location:21.0.1")
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("org.osmdroid:osmdroid-android:6.1.14") // OpenStreetMap
+    implementation("com.google.accompanist:accompanist-permissions:0.31.1-alpha") // Manejo de permisos
+    implementation("com.squareup.retrofit2:retrofit:2.9.0") // Retrofit para llamadas HTTP
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0") // Conversión JSON con Gson
 }

@@ -1,7 +1,5 @@
 package com.example.deregresoacasa
 
-import com.google.gson.annotations.SerializedName
-
-data class RouteResponse(@SerializedName("features")val features:List<Feature>)
-data class Feature(@SerializedName("geometry") val geometry:Geometry)
-data class Geometry(@SerializedName("coordinates") val coordinates:List<List<Double>> )
+data class RouteResponse(val features: List<Feature>)
+data class Feature(val geometry: Geometry)
+data class Geometry(val coordinates: List<List<Double>>)
