@@ -72,7 +72,7 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    implementation("org.osmdroid:osmdroid-android:6.1.14") // OpenStreetMap
+    implementation("org.osmdroid:osmdroid-android:6.1.16") // OpenStreetMap
     implementation("com.google.accompanist:accompanist-permissions:0.31.1-alpha") // Manejo de permisos
     implementation("com.squareup.retrofit2:retrofit:2.9.0") // Retrofit para llamadas HTTP
     implementation("com.squareup.retrofit2:converter-gson:2.9.0") // Conversión JSON con Gson

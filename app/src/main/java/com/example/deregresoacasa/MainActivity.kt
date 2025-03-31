@@ -29,6 +29,8 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.MapEventsOverlay
+import org.osmdroid.events.MapEventsReceiver
 
 class MainActivity : ComponentActivity() {
 
@@ -63,6 +65,8 @@ fun RouteMapScreen() {
     val mapView = remember { MapView(context) }
     var userLocation by remember { mutableStateOf<GeoPoint?>(null) }
     var homeLocation by remember { mutableStateOf<GeoPoint?>(null) }
+    val selectedMarker = remember { mutableStateOf<Marker?>(null) }
+    val selectedCoordinates = remember { mutableStateOf<GeoPoint?>(null) }
 
     // Función para cargar ubicación guardada
     fun getSavedHomeLocation(context: Context): GeoPoint? {
@@ -104,6 +108,7 @@ fun RouteMapScreen() {
                 val scaledBitmapCasa = Bitmap.createScaledBitmap(bitmapCasa, 20, 20, false)
                 val scaledDrawableCasa = BitmapDrawable(context.resources, scaledBitmapCasa)
 
+                // La ubicacion actual pibe xd
                 val startMarker = Marker(mapView).apply {
                     position = userLocation
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
@@ -123,6 +128,35 @@ fun RouteMapScreen() {
                     }
                     mapView.overlays.add(homeMarker)
                 }
+
+                // Evento al tocar el mapa y aparezca un icono
+                val receiver = object : org.osmdroid.events.MapEventsReceiver {
+                    override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                        p?.let {
+                            // Eliminar marcador anterior si existe
+                            selectedMarker.value?.let { mapView.overlays.remove(it) }
+
+                            val touchMarker = Marker(mapView).apply {
+                                position = it
+                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                icon = scaledDrawable
+                                title = "Marcador"
+                            }
+                            selectedMarker.value = touchMarker
+                            selectedCoordinates.value = it
+                            Log.d("Las coordenadas we", selectedCoordinates.toString())
+
+                            mapView.overlays.add(touchMarker)
+                            mapView.invalidate()
+                        }
+                        return true
+                    }
+
+                    override fun longPressHelper(p: GeoPoint?): Boolean = false
+                }
+
+                val overlayEventos = org.osmdroid.views.overlay.MapEventsOverlay(receiver)
+                mapView.overlays.add(overlayEventos)
 
                 mapView.invalidate()
             }
@@ -169,13 +203,24 @@ fun RouteMapScreen() {
             // Botón para establecer ubicación de casa
             Button(
                 onClick = {
-                    userLocation?.let {
-                        saveHomeLocation(context, it)
-                        homeLocation = it
+                    selectedCoordinates.value?.let { selectedPoint ->
+                        // Esto si elimina la anterior casita y carga la nueva
+                        mapView.overlays.removeAll {
+                            it is Marker && it.title == "Mi casa"
+                        }
+
+                        val drawableCasa = ContextCompat.getDrawable(context, R.drawable.casa)
+                        val bitmapCasa = (drawableCasa as BitmapDrawable).bitmap
+                        val scaledBitmapCasa = Bitmap.createScaledBitmap(bitmapCasa, 20, 20, false)
+                        val scaledDrawableCasa = BitmapDrawable(context.resources, scaledBitmapCasa)
+
+                        // Guardar coordenadas seleccionadas como casa
+                        saveHomeLocation(context, selectedPoint)
+
                         val homeMarker = Marker(mapView).apply {
-                            position = it
+                            position = selectedPoint
                             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            icon = ContextCompat.getDrawable(context, R.drawable.casa)
+                            icon = scaledDrawableCasa
                             title = "Mi casa"
                         }
                         mapView.overlays.add(homeMarker)
