@@ -24,6 +24,10 @@ import androidx.core.content.ContextCompat
 import com.google.accompanist.permissions.*
 import com.google.android.gms.location.*
 import com.google.android.gms.location.LocationServices
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -31,6 +35,9 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.views.overlay.Polyline
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 class MainActivity : ComponentActivity() {
 
@@ -67,6 +74,7 @@ fun RouteMapScreen() {
     var homeLocation by remember { mutableStateOf<GeoPoint?>(null) }
     val selectedMarker = remember { mutableStateOf<Marker?>(null) }
     val selectedCoordinates = remember { mutableStateOf<GeoPoint?>(null) }
+    var currentRoute: Polyline? = null
 
     // Función para cargar ubicación guardada
     fun getSavedHomeLocation(context: Context): GeoPoint? {
@@ -83,6 +91,45 @@ fun RouteMapScreen() {
             .putFloat("home_lat", location.latitude.toFloat())
             .putFloat("home_lon", location.longitude.toFloat())
             .apply()
+    }
+
+    // Dibujar la ruta dentro del mapa
+    fun drawRouteOnOSM(mapView: MapView, coordinates: List<List<Double>>) {
+        currentRoute?.let { mapView.overlays.remove(it) }
+
+        val polyline = Polyline().apply {
+            setPoints(coordinates.map { LatLon -> GeoPoint(LatLon[1], LatLon[0]) })
+            width = 5f
+        }
+        currentRoute = polyline
+        mapView.overlays.add(polyline)
+        mapView.invalidate()
+    }
+
+    // Limpiar la ruta
+    fun clearRoute() {
+        currentRoute?.let {
+            mapView.overlays.remove(it)
+            currentRoute = null
+            mapView.invalidate()
+        }
+    }
+
+    // Función para crear la ruta en el mapa
+    fun createRoute(start: String, end: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+            val call = getRetrofit().create(ApiService::class.java)
+                .getRoute("Es mi key >:", start, end)
+            if (call.isSuccessful) {
+                val routeResponse = call.body()
+                val coordinates = routeResponse?.features?.first()?.geometry?.coordinates ?: emptyList()
+                withContext(Dispatchers.Main) {
+                    drawRouteOnOSM(mapView, coordinates)
+                }
+            } else {
+                Log.i("Errosote", "Pos no jalo xd")
+            }
+        }
     }
 
     LaunchedEffect(locationPermission.status) {
@@ -157,8 +204,14 @@ fun RouteMapScreen() {
 
                 val overlayEventos = org.osmdroid.views.overlay.MapEventsOverlay(receiver)
                 mapView.overlays.add(overlayEventos)
-
                 mapView.invalidate()
+
+                // Llamar a la ruta desde ubicación actual hasta el punto seleccionado
+                userLocation?.let { start ->
+                    val startStr = "${start.longitude},${start.latitude}"
+                    val endStr = "${homeLocation?.longitude},${homeLocation?.latitude}"
+                    createRoute(startStr, endStr)
+                }
             }
         }
     }
@@ -171,10 +224,10 @@ fun RouteMapScreen() {
             )
 
             // Botón para acercar y alejar
-            Row(
+            /*Row(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 80.dp),
+                    .align(Alignment.TopCenter)
+                    .padding(bottom = 10.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Button(onClick = { mapView.controller.zoomIn() }) {
@@ -184,7 +237,7 @@ fun RouteMapScreen() {
                 Button(onClick = { mapView.controller.zoomOut() }) {
                     Text("-")
                 }
-            }
+            }*/
 
             // Botón centrar
             Button(
@@ -203,6 +256,7 @@ fun RouteMapScreen() {
             // Botón para establecer ubicación de casa
             Button(
                 onClick = {
+                    clearRoute()
                     selectedCoordinates.value?.let { selectedPoint ->
                         // Esto si elimina la anterior casita y carga la nueva
                         mapView.overlays.removeAll {
@@ -225,11 +279,18 @@ fun RouteMapScreen() {
                         }
                         mapView.overlays.add(homeMarker)
                         mapView.invalidate()
+
+                        // Llamar a la ruta desde ubicación actual hasta el punto seleccionado
+                        userLocation?.let { start ->
+                            val startStr = "${start.longitude},${start.latitude}"
+                            val endStr = "${selectedPoint.longitude},${selectedPoint.latitude}"
+                            createRoute(startStr, endStr)
+                        }
                     }
                 },
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
+                    .align(Alignment.BottomCenter)
+                    .padding(70.dp)
             ) {
                 Text("Establecer casa")
             }
@@ -247,4 +308,12 @@ fun getCurrentLocation(context: Context, onLocationReceived: (Location) -> Unit)
         .addOnFailureListener { e ->
             Log.e("LocationError", "No se pudo obtener la ubicación", e)
         }
+}
+
+// Obtener el retrofit
+private fun getRetrofit(): Retrofit {
+    return Retrofit.Builder()
+        .baseUrl("https://api.openrouteservice.org/")
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
 }
